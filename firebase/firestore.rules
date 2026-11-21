@@ -1,0 +1,270 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isVerifiedOwner(userId) {
+      return isVerified() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidUserProfile(data, userId) {
+      return data.keys().hasAll(['uid', 'displayName', 'email', 'language', 'theme', 'onboarded', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['uid', 'displayName', 'email', 'photoURL', 'bio', 'language', 'theme', 'onboarded', 'createdAt', 'updatedAt'])
+        && data.uid is string && data.uid == userId && isValidId(data.uid)
+        && data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 80
+        && data.email is string && data.email.size() >= 3 && data.email.size() <= 160
+        && (!('photoURL' in data) || (data.photoURL is string && data.photoURL.size() <= 200000))
+        && (!('bio' in data) || (data.bio is string && data.bio.size() <= 240))
+        && data.language in ['en', 'bn']
+        && data.theme in ['light', 'dark']
+        && data.onboarded is bool
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidTask(data, userId, taskId) {
+      return data.keys().hasAll([
+          'id', 'ownerId', 'title', 'description', 'categoryId', 'priority',
+          'status', 'estimatedMinutes', 'actualMinutes', 'subtasks', 'tags',
+          'attachments', 'repeatRule', 'isArchived', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'id', 'ownerId', 'title', 'description', 'categoryId', 'projectId',
+          'priority', 'status', 'startAt', 'dueAt', 'reminderAt',
+          'estimatedMinutes', 'actualMinutes', 'timerStartedAt',
+          'subtasks', 'tags', 'attachments', 'repeatRule',
+          'recurrenceSeriesId', 'isArchived', 'completedAt',
+          'createdAt', 'updatedAt'
+        ])
+        && data.id is string && data.id == taskId && isValidId(data.id)
+        && data.ownerId is string && data.ownerId == userId && isValidId(data.ownerId)
+        && data.title is string && data.title.size() >= 1 && data.title.size() <= 140
+        && data.description is string && data.description.size() <= 2000
+        && data.categoryId is string && data.categoryId.size() >= 1 && data.categoryId.size() <= 64 && isValidId(data.categoryId)
+        && (!('projectId' in data) || data.projectId == null || (data.projectId is string && data.projectId.size() <= 64))
+        && data.priority in ['low', 'medium', 'high', 'urgent']
+        && data.status in ['pending', 'in_progress', 'completed', 'cancelled']
+        && (!('startAt' in data) || data.startAt == null || data.startAt is timestamp)
+        && (!('dueAt' in data) || data.dueAt == null || data.dueAt is timestamp)
+        && (!('reminderAt' in data) || data.reminderAt == null || data.reminderAt is timestamp)
+        && data.estimatedMinutes is number && data.estimatedMinutes >= 0 && data.estimatedMinutes <= 14400
+        && data.actualMinutes is number && data.actualMinutes >= 0 && data.actualMinutes <= 14400
+        && (!('timerStartedAt' in data) || data.timerStartedAt == null || (data.timerStartedAt is number && data.timerStartedAt >= 0))
+        && data.subtasks is list && data.subtasks.size() <= 25
+        && (data.subtasks.size() == 0 || data.subtasks[0] is map)
+        && data.tags is list && data.tags.size() <= 10
+        && (data.tags.size() == 0 || (data.tags[0] is string && data.tags[0].size() <= 32))
+        && data.attachments is list && data.attachments.size() <= 10
+        && (data.attachments.size() == 0 || data.attachments[0] is map)
+        && data.repeatRule in ['none', 'daily', 'weekly', 'monthly']
+        && (!('recurrenceSeriesId' in data) || data.recurrenceSeriesId == null || (data.recurrenceSeriesId is string && data.recurrenceSeriesId.size() <= 128))
+        && data.isArchived is bool
+        && (!('completedAt' in data) || data.completedAt == null || data.completedAt is timestamp)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidCategory(data, userId, categoryId) {
+      return data.keys().hasAll(['id', 'ownerId', 'name', 'color', 'icon', 'isDefault', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['id', 'ownerId', 'name', 'color', 'icon', 'isDefault', 'createdAt', 'updatedAt'])
+        && data.id is string && data.id == categoryId && isValidId(data.id)
+        && data.ownerId is string && data.ownerId == userId && isValidId(data.ownerId)
+        && data.name is string && data.name.size() >= 1 && data.name.size() <= 48
+        && data.color is string && data.color.size() >= 4 && data.color.size() <= 16
+        && data.icon is string && data.icon.size() >= 1 && data.icon.size() <= 32
+        && data.isDefault is bool
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidProject(data, userId, projectId) {
+      return data.keys().hasAll(['id', 'ownerId', 'name', 'description', 'color', 'icon', 'isArchived', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['id', 'ownerId', 'name', 'description', 'color', 'icon', 'isArchived', 'createdAt', 'updatedAt'])
+        && data.id is string && data.id == projectId && isValidId(data.id)
+        && data.ownerId is string && data.ownerId == userId && isValidId(data.ownerId)
+        && data.name is string && data.name.size() >= 1 && data.name.size() <= 64
+        && data.description is string && data.description.size() <= 300
+        && data.color is string && data.color.size() >= 4 && data.color.size() <= 16
+        && data.icon is string && data.icon.size() >= 1 && data.icon.size() <= 32
+        && data.isArchived is bool
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidNotificationPreferences(data, userId) {
+      return data.keys().hasAll([
+          'ownerId', 'dueReminders', 'upcomingAlerts', 'overdueAlerts',
+          'dailySummary', 'morningBrief', 'morningTime',
+          'quietHoursEnabled', 'quietStart', 'quietEnd', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'ownerId', 'dueReminders', 'upcomingAlerts', 'overdueAlerts',
+          'dailySummary', 'morningBrief', 'morningTime',
+          'quietHoursEnabled', 'quietStart', 'quietEnd', 'updatedAt'
+        ])
+        && data.ownerId is string && data.ownerId == userId && isValidId(data.ownerId)
+        && data.dueReminders is bool
+        && data.upcomingAlerts is bool
+        && data.overdueAlerts is bool
+        && data.dailySummary is bool
+        && data.morningBrief is bool
+        && data.morningTime is string && data.morningTime.size() >= 4 && data.morningTime.size() <= 10
+        && data.quietHoursEnabled is bool
+        && data.quietStart is string && data.quietStart.size() >= 4 && data.quietStart.size() <= 10
+        && data.quietEnd is string && data.quietEnd.size() >= 4 && data.quietEnd.size() <= 10
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidNotification(data, userId, notificationId) {
+      return data.keys().hasAll(['id', 'ownerId', 'taskId', 'title', 'body', 'type', 'isRead', 'createdAt'])
+        && data.keys().hasOnly(['id', 'ownerId', 'taskId', 'title', 'body', 'type', 'isRead', 'createdAt'])
+        && data.id is string && data.id == notificationId && isValidId(data.id)
+        && data.ownerId is string && data.ownerId == userId && isValidId(data.ownerId)
+        && data.taskId is string && data.taskId.size() <= 128
+        && data.title is string && data.title.size() >= 1 && data.title.size() <= 140
+        && data.body is string && data.body.size() <= 400
+        && data.type in ['due', 'upcoming', 'overdue', 'summary', 'system']
+        && data.isRead is bool
+        && data.createdAt is timestamp;
+    }
+
+    match /users/{userId} {
+      allow get: if isValidId(userId) && isOwner(userId);
+      allow create: if isValidId(userId) && isVerifiedOwner(userId)
+        && isValidUserProfile(incoming(), userId)
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(userId) && isVerifiedOwner(userId)
+        && isValidUserProfile(incoming(), userId)
+        && incoming().uid == existing().uid
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'photoURL', 'bio', 'updatedAt']) ||
+          incoming().diff(existing()).affectedKeys().hasOnly(['language', 'theme', 'updatedAt']) ||
+          incoming().diff(existing()).affectedKeys().hasOnly(['onboarded', 'displayName', 'photoURL', 'bio', 'language', 'theme', 'updatedAt'])
+        );
+      allow delete: if isValidId(userId) && isVerifiedOwner(userId);
+
+      match /tasks/{taskId} {
+        allow get: if isValidId(userId) && isValidId(taskId) && isOwner(userId);
+        allow list: if isValidId(userId) && isOwner(userId) && resource.data.ownerId == request.auth.uid;
+        allow create: if isValidId(userId) && isValidId(taskId) && isVerifiedOwner(userId)
+          && isValidTask(incoming(), userId, taskId)
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time;
+        allow update: if isValidId(userId) && isValidId(taskId) && isVerifiedOwner(userId)
+          && isValidTask(incoming(), userId, taskId)
+          && incoming().id == existing().id
+          && incoming().ownerId == existing().ownerId
+          && incoming().createdAt == existing().createdAt
+          && incoming().updatedAt == request.time
+          && (
+            incoming().diff(existing()).affectedKeys().hasOnly(['status', 'completedAt', 'updatedAt']) ||
+            incoming().diff(existing()).affectedKeys().hasOnly(['timerStartedAt', 'actualMinutes', 'status', 'updatedAt']) ||
+            incoming().diff(existing()).affectedKeys().hasOnly(['subtasks', 'updatedAt']) ||
+            incoming().diff(existing()).affectedKeys().hasOnly(['isArchived', 'updatedAt']) ||
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'title', 'description', 'categoryId', 'projectId', 'priority',
+              'status', 'startAt', 'dueAt', 'reminderAt', 'estimatedMinutes',
+              'actualMinutes', 'subtasks', 'tags', 'attachments', 'repeatRule',
+              'recurrenceSeriesId', 'isArchived', 'completedAt', 'updatedAt'
+            ])
+          );
+        allow delete: if isValidId(userId) && isValidId(taskId) && isVerifiedOwner(userId);
+      }
+
+      match /categories/{categoryId} {
+        allow get: if isValidId(userId) && isValidId(categoryId) && isOwner(userId);
+        allow list: if isValidId(userId) && isOwner(userId) && resource.data.ownerId == request.auth.uid;
+        allow create: if isValidId(userId) && isValidId(categoryId) && isVerifiedOwner(userId)
+          && isValidCategory(incoming(), userId, categoryId)
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time;
+        allow update: if isValidId(userId) && isValidId(categoryId) && isVerifiedOwner(userId)
+          && isValidCategory(incoming(), userId, categoryId)
+          && incoming().id == existing().id
+          && incoming().ownerId == existing().ownerId
+          && incoming().createdAt == existing().createdAt
+          && incoming().updatedAt == request.time
+          && incoming().diff(existing()).affectedKeys().hasOnly(['name', 'color', 'icon', 'updatedAt']);
+        allow delete: if isValidId(userId) && isValidId(categoryId) && isVerifiedOwner(userId);
+      }
+
+      match /projects/{projectId} {
+        allow get: if isValidId(userId) && isValidId(projectId) && isOwner(userId);
+        allow list: if isValidId(userId) && isOwner(userId) && resource.data.ownerId == request.auth.uid;
+        allow create: if isValidId(userId) && isValidId(projectId) && isVerifiedOwner(userId)
+          && isValidProject(incoming(), userId, projectId)
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time;
+        allow update: if isValidId(userId) && isValidId(projectId) && isVerifiedOwner(userId)
+          && isValidProject(incoming(), userId, projectId)
+          && incoming().id == existing().id
+          && incoming().ownerId == existing().ownerId
+          && incoming().createdAt == existing().createdAt
+          && incoming().updatedAt == request.time
+          && incoming().diff(existing()).affectedKeys().hasOnly(['name', 'description', 'color', 'icon', 'isArchived', 'updatedAt']);
+        allow delete: if isValidId(userId) && isValidId(projectId) && isVerifiedOwner(userId);
+      }
+
+      match /notificationPreferences/{prefId} {
+        allow get: if isValidId(userId) && isValidId(prefId) && isOwner(userId);
+        allow create: if isValidId(userId) && isValidId(prefId) && isVerifiedOwner(userId)
+          && isValidNotificationPreferences(incoming(), userId)
+          && incoming().updatedAt == request.time;
+        allow update: if isValidId(userId) && isValidId(prefId) && isVerifiedOwner(userId)
+          && isValidNotificationPreferences(incoming(), userId)
+          && incoming().ownerId == existing().ownerId
+          && incoming().updatedAt == request.time
+          && incoming().diff(existing()).affectedKeys().hasOnly([
+            'dueReminders', 'upcomingAlerts', 'overdueAlerts', 'dailySummary',
+            'morningBrief', 'morningTime', 'quietHoursEnabled', 'quietStart',
+            'quietEnd', 'updatedAt'
+          ]);
+        allow delete: if isValidId(userId) && isValidId(prefId) && isVerifiedOwner(userId);
+      }
+
+      match /notifications/{notificationId} {
+        allow get: if isValidId(userId) && isValidId(notificationId) && isOwner(userId);
+        allow list: if isValidId(userId) && isOwner(userId) && resource.data.ownerId == request.auth.uid;
+        allow create: if isValidId(userId) && isValidId(notificationId) && isVerifiedOwner(userId)
+          && isValidNotification(incoming(), userId, notificationId)
+          && incoming().createdAt == request.time;
+        allow update: if isValidId(userId) && isValidId(notificationId) && isVerifiedOwner(userId)
+          && isValidNotification(incoming(), userId, notificationId)
+          && incoming().id == existing().id
+          && incoming().ownerId == existing().ownerId
+          && incoming().createdAt == existing().createdAt
+          && incoming().diff(existing()).affectedKeys().hasOnly(['isRead']);
+        allow delete: if isValidId(userId) && isValidId(notificationId) && isVerifiedOwner(userId);
+      }
+    }
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "name": "TaskFlow — Daily Task Tracker",
+  "description": "Production-grade daily task management application with real-time Firebase sync, calendar agenda, productivity analytics, reminders, and English/Bangla localization.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
